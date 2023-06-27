@@ -1,28 +1,60 @@
 import * as fs from 'fs';
+import * as log4js from 'log4js';
 import {Transaction} from "./Transaction";
 import {Account} from "./Account";
 
-const filePath: string = "transactions.csv";
-let fileLines: Array<string>;
+log4js.configure({
+    appenders: {
+        file: { type: 'fileSync', filename: 'logs/debug.log' }
+    },
+    categories: {
+        default: { appenders: ['file'], level: 'debug'}
+    }
+});
 
+const logger = log4js.getLogger('supportbank.log');
+
+const filePath: string = "DodgyTransactions2015.csv";
+let fileLines: Array<string>;
 function parseFile(): void {
     const file = fs.readFileSync(filePath, 'utf-8');
     fileLines = file.split('\n');
     fileLines.shift();
+    logger.log("Finished parsing file ", filePath);
+}
 
+let parseDate = (stringDate: string) => {
+    let words = stringDate.split("/");
+    if (words.length != 3) {
+        logger.log("Date in incorrect format");
+        return null;
+    } else {
+        return new Date(Number(words[2]), Number(words[1]), Number(words[0]));
+    }
 }
 
 let transactionList: Array<Transaction> = [];
 function storeTransactions(): void {
+    logger.log("Storing and parsing transactions");
     for (let line of fileLines) {
         let words: any[] = line.split(",");
-        let transaction: Transaction = new Transaction(words[0], words[1], words[2], words[3], Number(words[4]));
+        let date = parseDate(words[0]);
+        if (date == null) {
+            continue;
+        }
+        let transactionValue = Number(words[4]);
+        if (isNaN(+transactionValue)) {
+            logger.log("Transaction value must be a number");
+            continue;
+        }
+        let transaction: Transaction = new Transaction(date, words[1], words[2], words[3], transactionValue);
         transactionList.push(transaction);
     }
 }
 
 let personList: string[] = [];
 function storeUniquePeople(transactionList: Array<Transaction>): void {
+    logger.log("Identifying unique people to create accounts");
     for (let transaction of transactionList) {
         personList.push(transaction.sender);
         personList.push(transaction.receiver);
@@ -33,6 +65,7 @@ function storeUniquePeople(transactionList: Array<Transaction>): void {
 
 let accountList: Array<Account> = [];
 function createAccounts(): void {
+    logger.log("Creating accounts", filePath);
     for (let person of personList) {
         let account = new Account(person, 0, []);
         accountList.push(account);
@@ -49,6 +82,7 @@ function identifyAccount(ownerName: string) {
 }
 
 function updateAccountValues(): void {
+    logger.log("Registering transactions", filePath);
     for (let transaction of transactionList) {
         let sender = identifyAccount(transaction.sender);
         let receiver = identifyAccount(transaction.receiver);
