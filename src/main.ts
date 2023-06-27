@@ -1,26 +1,50 @@
 import * as fs from 'fs';
 import * as log4js from 'log4js';
+
 import {Transaction} from "./Transaction";
 import {Account} from "./Account";
 
+const readLineSync = require('readline-sync');
+
 log4js.configure({
     appenders: {
-        file: { type: 'fileSync', filename: 'logs/debug.log' }
+        file: {type: 'fileSync', filename: 'logs/debug.log'}
     },
     categories: {
-        default: { appenders: ['file'], level: 'debug'}
+        default: {appenders: ['file'], level: 'debug'}
     }
 });
 
 const logger = log4js.getLogger('supportbank.log');
 
-const filePath: string = "DodgyTransactions2015.csv";
+class MyJSONObj {
+    Date: Date;
+    FromAccount: string;
+    ToAccount: string;
+    Narrative: string;
+    Amount: number;
+
+    constructor(Date: Date, FromAccount: string, ToAccount: string, Narrative: string, Amount: number) {
+        this.Date = Date;
+        this.FromAccount = FromAccount;
+        this.ToAccount = ToAccount;
+        this.Narrative = Narrative;
+        this.Amount = Amount;
+    }
+}
+
+let filetype = "";
+let filePath: string = "";
+let file: string = "";
 let fileLines: Array<string>;
+
 function parseFile(): void {
-    const file = fs.readFileSync(filePath, 'utf-8');
-    fileLines = file.split('\n');
-    fileLines.shift();
-    logger.log("Finished parsing file ", filePath);
+    file = fs.readFileSync(filePath, 'utf-8');
+    if (filetype !== "json") {
+        fileLines = file.split('\n');
+        fileLines.shift();
+        logger.log("Finished parsing file ", filePath);
+    }
 }
 
 let parseDate = (stringDate: string) => {
@@ -34,8 +58,19 @@ let parseDate = (stringDate: string) => {
 }
 
 let transactionList: Array<Transaction> = [];
-function storeTransactions(): void {
+let jsonList: Array<MyJSONObj> = [];
+
+function storeTransactionsJSON(): void {
     logger.log("Storing and parsing transactions");
+    jsonList = JSON.parse(file) as MyJSONObj[];
+    for (let jsonObj of jsonList) {
+        transactionList.push(new Transaction(jsonObj.Date,
+            jsonObj.FromAccount, jsonObj.ToAccount, jsonObj.Narrative, jsonObj.Amount));
+    }
+
+}
+
+function storeTransactions(): void {
     for (let line of fileLines) {
         let words: any[] = line.split(",");
         let date = parseDate(words[0]);
@@ -53,6 +88,7 @@ function storeTransactions(): void {
 }
 
 let personList: string[] = [];
+
 function storeUniquePeople(transactionList: Array<Transaction>): void {
     logger.log("Identifying unique people to create accounts");
     for (let transaction of transactionList) {
@@ -64,6 +100,7 @@ function storeUniquePeople(transactionList: Array<Transaction>): void {
 }
 
 let accountList: Array<Account> = [];
+
 function createAccounts(): void {
     logger.log("Creating accounts", filePath);
     for (let person of personList) {
@@ -101,28 +138,45 @@ function listBalances(): void {
     }
 }
 
-parseFile();
-storeTransactions();
-storeUniquePeople(transactionList);
-createAccounts();
-updateAccountValues();
 
-const readline = require('readline').createInterface({
-    input: process.stdin,
-    output: process.stdout
-});
 
-readline.question('Please enter the query: ', (limit: string) => {
-    if (limit === "List All") {
-        listBalances();
-    } else {
-        let queryWords = limit.split(" ");
-        let account = identifyAccount(queryWords[1] + " " + queryWords[2]);
-        if (account == null) {
-            console.log("Account does not exist.");
+function getUserInput() {
+    while (true) {
+        const query = readLineSync.question('Enter query\n> ');
+        let queryWords = query.split(" ");
+        if (queryWords[0] === "Import") {
+            filePath = queryWords[2];
+            let determineFileType = (file: string) => {
+                let path: string[] = filePath.split(".");
+                filetype = path[path.length - 1];
+            }
+            determineFileType(filePath);
+            main();
+        } else if (queryWords[0] === "List") {
+            if (queryWords[1] === "All") {
+                listBalances();
+            } else {
+                let account = identifyAccount(queryWords[1] + " " + queryWords[2]);
+                if (account == null) {
+                    console.log("Account does not exist.");
+                } else {
+                    console.log(account.transactions);
+                }
+            }
         } else {
-            console.log(account.transactions);
+            break;
         }
     }
-    readline.close();
-});
+}
+getUserInput();
+function main() {
+    parseFile();
+    if (filetype === "json") {
+        storeTransactionsJSON();
+    } else {
+        storeTransactions();
+    }
+    storeUniquePeople(transactionList);
+    createAccounts();
+    updateAccountValues();
+}
