@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/SupportBank.iml" filepath="$PROJECT_DIR$/.idea/SupportBank.iml" />
+      <module fileurl="file://$PROJECT_DIR$/commands.iml" filepath="$PROJECT_DIR$/commands.iml" />
       <module fileurl="file://$PROJECT_DIR$/src.iml" filepath="$PROJECT_DIR$/src.iml" />
     </modules>
   </component>

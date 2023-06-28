@@ -1,23 +1,11 @@
 import * as fs from 'fs';
 import * as log4js from 'log4js';
-
 import {Transaction} from "./Transaction";
 import {Account} from "./Account";
+import {File} from "./File";
 
 const readLineSync = require('readline-sync');
-
-log4js.configure({
-    appenders: {
-        file: {type: 'fileSync', filename: 'logs/debug.log'}
-    },
-    categories: {
-        default: {appenders: ['file'], level: 'debug'}
-    }
-});
-
-const logger = log4js.getLogger('supportbank.log');
-
-class MyJSONObj {
+export class MyJSONObj {
     Date: Date;
     FromAccount: string;
     ToAccount: string;
@@ -33,19 +21,18 @@ class MyJSONObj {
     }
 }
 
-let filetype = "";
-let filePath: string = "";
-let file: string = "";
-let fileLines: Array<string>;
-
-function parseFile(): void {
-    file = fs.readFileSync(filePath, 'utf-8');
-    if (filetype !== "json") {
-        fileLines = file.split('\n');
-        fileLines.shift();
-        logger.log("Finished parsing file ", filePath);
+log4js.configure({
+    appenders: {
+        file: {type: 'fileSync', filename: 'logs/debug.log'}
+    },
+    categories: {
+        default: {appenders: ['file'], level: 'debug'}
     }
-}
+});
+
+const logger = log4js.getLogger('supportbank.log');
+
+
 
 let parseDate = (stringDate: string) => {
     let words = stringDate.split("/");
@@ -62,16 +49,15 @@ let jsonList: Array<MyJSONObj> = [];
 
 function storeTransactionsJSON(): void {
     logger.log("Storing and parsing transactions");
-    jsonList = JSON.parse(file) as MyJSONObj[];
-    for (let jsonObj of jsonList) {
+    for (let jsonObj of inputFile.fileJsonArray) {
         transactionList.push(new Transaction(jsonObj.Date,
             jsonObj.FromAccount, jsonObj.ToAccount, jsonObj.Narrative, jsonObj.Amount));
     }
 
 }
 
-function storeTransactions(): void {
-    for (let line of fileLines) {
+function storeTransactionsCSV(): void {
+    for (let line of inputFile.fileLines) {
         let words: any[] = line.split(",");
         let date = parseDate(words[0]);
         if (date == null) {
@@ -102,7 +88,7 @@ function storeUniquePeople(transactionList: Array<Transaction>): void {
 let accountList: Array<Account> = [];
 
 function createAccounts(): void {
-    logger.log("Creating accounts", filePath);
+    logger.log("Creating accounts", inputFile.filePath);
     for (let person of personList) {
         let account = new Account(person, 0, []);
         accountList.push(account);
@@ -119,7 +105,7 @@ function identifyAccount(ownerName: string) {
 }
 
 function updateAccountValues(): void {
-    logger.log("Registering transactions", filePath);
+    logger.log("Registering transactions", inputFile.filePath);
     for (let transaction of transactionList) {
         let sender = identifyAccount(transaction.sender);
         let receiver = identifyAccount(transaction.receiver);
@@ -138,19 +124,16 @@ function listBalances(): void {
     }
 }
 
-
+let inputFile: File;
 
 function getUserInput() {
     while (true) {
         const query = readLineSync.question('Enter query\n> ');
         let queryWords = query.split(" ");
         if (queryWords[0] === "Import") {
-            filePath = queryWords[2];
-            let determineFileType = (file: string) => {
-                let path: string[] = filePath.split(".");
-                filetype = path[path.length - 1];
-            }
-            determineFileType(filePath);
+            let filePath = queryWords[2];
+            inputFile = new File(filePath);
+            inputFile.determineFileType();
             main();
         } else if (queryWords[0] === "List") {
             if (queryWords[1] === "All") {
@@ -166,15 +149,18 @@ function getUserInput() {
         } else {
             break;
         }
+        console.log();
     }
 }
 getUserInput();
 function main() {
-    parseFile();
-    if (filetype === "json") {
+    inputFile.readFileContents();
+    if (inputFile.fileType === "json") {
+        inputFile.parseFileJSON();
         storeTransactionsJSON();
     } else {
-        storeTransactions();
+        inputFile.parseFileCSV();
+        storeTransactionsCSV();
     }
     storeUniquePeople(transactionList);
     createAccounts();
